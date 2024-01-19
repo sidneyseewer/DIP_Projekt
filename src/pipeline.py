@@ -3,6 +3,8 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from enum import Enum
+import python.imutils as imutils
+
 """
 subfolders = [
     '0-Normal', '1-NoHat', '2-NoFace', '3-NoLeg', '4-NoBodyPrint',
@@ -97,22 +99,39 @@ def start_pipeline(debug_level = DebugLevel.DEBUG, img = None):
         print("Could not geet Background Image")
         return
     print("Backgournd Image found")
-    background_image = cv2.imread(background_image_path,cv2.IMREAD_GRAYSCALE)
+    background_image = cv2.imread(background_image_path)
     showImage(background_image,debug_level=debug_level, name="Background Image")
     # Get image
     if img is None:
         normal_imgs = retrieve_images("Normal")
         img = normal_imgs[1]
-    image = cv2.imread(img,cv2.IMREAD_GRAYSCALE)
+    image = cv2.imread(img)
     showImage(image,debug_level=debug_level,name="Image to treat")
+    
     # Subtract Background
-    img_no_background = subImages(image,background_image)
+    img_no_background = imutils.shadding(image, background_image)
     showImage(img_no_background, debug_level=debug_level,name="Subtracted Background")
-    # Threshhold Image
-    img_thresh = threshhold_image(img_no_background)
-    showImage(img_thresh,debug_level=debug_level,name="Thresholded Image")
-    img_shapes = removeSaltPeper(img_thresh)
-    showImage(img_shapes,debug_level=debug_level, name="Removed small specs")
+
+    im_gray = cv2.cvtColor(img_no_background, cv2.COLOR_BGR2GRAY)
+    (thresh, imgBW) = cv2.threshold(im_gray, 128, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+    showImage(imgBW, debug_level=debug_level,name="BW")
+
+    imclearborder = imutils.imclearborder(imgBW, 15)
+    showImage(imclearborder, debug_level=debug_level,name="Cleared the Border")
+
+    im_opened = imutils.bwareaopen(imclearborder, 200)
+    showImage(im_opened, debug_level=debug_level,name="Opened")
+
+    # extract rectangle properties
+    img_props = imutils.regionprops(im_opened)
+    contours, area_vec, [cx, cy], rect, ell_rot = img_props
+    box = cv2.boxPoints(rect)
+    box = np.int0(box)
+
+    # Draw the rectangle on the original image/copy
+    image_with_rect = cv2.drawContours(image.copy(), [box], 0, (0, 255, 0), 2)
+
+    showImage(image_with_rect, debug_level=debug_level,name="Rectangle")
 
 if __name__ == "__main__":
     start_pipeline(DebugLevel.DEBUG)
