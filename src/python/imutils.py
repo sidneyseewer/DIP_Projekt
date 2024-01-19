@@ -5,7 +5,7 @@ import math
 def im2double(img):
    """ Return a image in float64 format in a range of [0, 1] """
    info = np.iinfo(img.dtype) # Get the data type of the input image
-   return img.astype(np.float) / info.max # Divide all values by the largest possible value in the datatype
+   return img.astype(float) / info.max # Divide all values by the largest possible value in the datatype
 
 def im2uint8(img):
    """ This function converts the input image I1 to uint8. Input values in range [0,1] are scaled to [0,255],
@@ -62,7 +62,7 @@ def bwareaopen(imgBW, areaPixels):
    """ Removes all connected components (objects) that have fewer than P pixels from the binary image BW, p
        roducing another binary image, BW2. This operation is known as an area opening. """
    imgBWcopy = imgBW.copy()
-   image, contours,hierarchy = cv2.findContours(imgBWcopy.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+   contours,hierarchy = cv2.findContours(imgBWcopy.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
    # For each contour, determine its total occupying area
    for idx in np.arange(len(contours)):
