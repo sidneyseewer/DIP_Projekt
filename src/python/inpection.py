@@ -3,7 +3,8 @@ from matplotlib import pyplot as plt
 
 import imutils as utils
 import glob
-import initdata as init
+from python.initdata import initdata
+#import initdata as init
 import random # only used to return random labels
 
 # hook here your function to inspect image and return label for the detected defect
@@ -14,9 +15,9 @@ def inspect_image(img, defects):
 
 
 # read background image for shading correction
-imgbackground = cv2.imread('../../img/Other/image_100.jpg')
+imgbackground = cv2.imread('../img/Other/image_100.jpg')
 
-template, defects = init.initdata()
+template, defects = initdata()
 
 do_plot = False # Enable plotting of images which are processed
 
