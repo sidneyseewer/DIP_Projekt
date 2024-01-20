@@ -1,4 +1,5 @@
 import getImages
+from python.inpection import inspect_image
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
@@ -132,6 +133,10 @@ def start_pipeline(debug_level = DebugLevel.DEBUG, img = None):
     image_with_rect = cv2.drawContours(image.copy(), [box], 0, (0, 255, 0), 2)
 
     showImage(image_with_rect, debug_level=debug_level,name="Rectangle")
+
+    # Testen ob Funktionen von inpection.py ausführbar sind
+    image_processed, _ = inspect_image(im_opened,None)
+    showImage(image_processed,debug_level=debug_level,name="Processed Image")
 
 if __name__ == "__main__":
     start_pipeline(DebugLevel.DEBUG)
