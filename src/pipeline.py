@@ -43,6 +43,8 @@ def showImage(img, debug_level = DebugLevel.DEBUG, name = "Image"):
     if img is None:
         return
     if debug_level.value < 2:
+        if(img.shape[1] < 200):
+            img = cv2.resize(img, (img.shape[1] * 2, img.shape[0] * 2), interpolation=cv2.INTER_AREA)
         cv2.imshow(name,img)
         cv2.waitKey()
 
@@ -128,13 +130,132 @@ def pad_to_center(image1, image2):
         image2 = cv2.copyMakeBorder(image2, pad_top2, pad_bot2, pad_left2, pad_right2, cv2.BORDER_CONSTANT, value=[0, 0, 0])
 
     return image1, image2
+def subtractBackground(debug_level = DebugLevel.DEBUG, image = None, background_image = None):
+    # Subtract Background
+    img_no_background = imutils.shadding(image, background_image)
+    showImage(img_no_background, debug_level=debug_level,name="Subtracted Background")
+    
+    return img_no_background
+
+def convertToBW(debug_level = DebugLevel.DEBUG, img_no_background = None):
+    im_gray = cv2.cvtColor(img_no_background, cv2.COLOR_BGR2GRAY)
+    (thresh, imgBW) = cv2.threshold(im_gray, 128, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+    showImage(imgBW, debug_level=debug_level,name="BW")
+    
+    return imgBW
+
+def clearBorder(debug_level = DebugLevel.DEBUG, imgBW = None):
+    imclearborder = imutils.imclearborder(imgBW, 15)
+    showImage(imclearborder, debug_level=debug_level,name="Cleared the Border")
+
+    return imclearborder
+
+def opening(debug_level = DebugLevel.DEBUG, imclearborder = None):
+    im_opened = imutils.bwareaopen(imclearborder, 200)
+    showImage(im_opened, debug_level=debug_level,name="Opened")
+    
+    return im_opened
+
+def closing(debug_level = DebugLevel.DEBUG, im_opened = None, SE_size = 20):
+    # apply closing operation using a SE
+    se = cv2.getStructuringElement(cv2.MORPH_RECT, (20, 20))
+    # borderType is constant by default
+    closing = cv2.morphologyEx(im_opened, cv2.MORPH_CLOSE, se, iterations=1)
+    showImage(closing, debug_level=debug_level,name="Img closing")
+
+    return closing
+
+def drawRectanle(debug_level = DebugLevel.DEBUG, image = None, rect = 0):
+    box = cv2.boxPoints(rect)
+    box = np.int0(box)
+
+    # Draw the rectangle on the original image/copy
+    image_with_rect = cv2.drawContours(image.copy(), [box], 0, (0, 255, 0), 2)
+    # cv2.ellipse(image_with_rect,rect, ell_rot, (128,128,0),2)
+    showImage(image_with_rect, debug_level=debug_level,name="Rectangle")
+
+    return image_with_rect
+
+def getCorrectRotationAngle(debug_level = DebugLevel.DEBUG, im_closed = None, cx = 0, cy = 0, rect = 0):
+    template, defects = init.initdata()
+    perfect_angle = 0
+    biggest_count_non_zeros = 0
+    angle_offset= [0, 180]
+
+    showImage(template["img_mask"], debug_level=DebugLevel.DEBUG,name="template")
+
+    for offset in angle_offset:
+        angle= rect[2] + offset
+        # Calculate the rotation matrix
+        M = cv2.getRotationMatrix2D((cx, cy), angle, 1.0)
+
+        # Perform the rotation
+        rotated_image_bw = cv2.warpAffine(im_closed, M, im_closed.shape[1::-1])
+
+        # Get the size of the rotated rectangle
+        size = (int(rect[1][0]), int(rect[1][1]))
+
+        # Extract the straightened ROI
+        x, y = np.int0((cx, cy))
+        x -= size[0] // 2
+        y -= size[1] // 2
+        straightened_roi_bw = rotated_image_bw[y:y+size[1], x:x+size[0]]
+
+        straightened_roi_bw, template["img_mask"] = pad_to_center(straightened_roi_bw, template["img_mask"])
+        
+        bitwise_and = cv2.bitwise_and(straightened_roi_bw, template["img_mask"])
+
+        
+        showImage(straightened_roi_bw, debug_level=DebugLevel.DEBUG,name="Found")
+        showImage(bitwise_and, debug_level=DebugLevel.DEBUG,name = str(offset) + " degree subtracted template ")
+
+        count_non_zeros = cv2.countNonZero(bitwise_and)
+        
+        if(count_non_zeros >= biggest_count_non_zeros):
+            biggest_count_non_zeros = count_non_zeros
+            perfect_angle = angle
+
+    return perfect_angle
+
+
+def rotateImage(debug_level = DebugLevel.DEBUG, image = None, angle = 0, center = (0, 0)):
+    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+    
+    # Perform the rotation
+    rotated = cv2.warpAffine(image, M, image.shape[1::-1])
+    showImage(rotated, debug_level=debug_level,name="Rotated image")
+
+    return rotated
+
+def correctRectangle(rect = None):
+    """
+    Swaps width and height and corrects the Rectangle if width > height
+    """
+    width = rect[1][0]
+    height = rect[1][1]
+    if(width > height):
+        rect = ((rect[0][0], rect[0][1]), (height, width), rect[2] + 90)
+    return rect
+
+def getTemplatePart(path = None):
+    """
+    Extracts a part of the template.
+    Param: path to the mask of the needed part. 
+    """
+    template, defects = init.initdata()
+    mask = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+
+    return cv2.bitwise_and(mask,template['imgg'])
 
 def start_pipeline(debug_level = DebugLevel.DEBUG, img = None):
 
+    # extract part of template
     template, defects = init.initdata()
-
-    # cv2.imshow("name",template["img_mask_no_hat"])
-    # cv2.waitKey()
+    hat_template = getTemplatePart("./img/templates/mask_hat.png")
+    cv2.imshow("img0",template['imgg'])
+    cv2.imshow("hat_template",hat_template)
+    
+    cv2.waitKey()
 
     # Get background
     background_image_path = get_background_image()
@@ -146,100 +267,37 @@ def start_pipeline(debug_level = DebugLevel.DEBUG, img = None):
     showImage(background_image,debug_level=debug_level, name="Background Image")
     # Get image
     if img is None:
-        normal_imgs = retrieve_images("Normal")
-        img = normal_imgs[12]
+        normal_imgs = retrieve_images("All")
+        img = normal_imgs[9]
     image = cv2.imread(img)
+
     showImage(image,debug_level=debug_level,name="Image to treat")
     
-    # Subtract Background
-    img_no_background = imutils.shadding(image, background_image)
-    showImage(img_no_background, debug_level=debug_level,name="Subtracted Background")
+    img_no_background = subtractBackground(debug_level, image, background_image)
+    imgBW = convertToBW(debug_level, img_no_background)
+    imclearborder = clearBorder(debug_level, imgBW)
+    im_opened = opening(debug_level, imclearborder)
+    im_closed = closing(debug_level= DebugLevel.DEBUG, im_opened=im_opened, SE_size=20)
 
-    im_gray = cv2.cvtColor(img_no_background, cv2.COLOR_BGR2GRAY)
-    (thresh, imgBW) = cv2.threshold(im_gray, 128, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
-    showImage(imgBW, debug_level=debug_level,name="BW")
-
-    imclearborder = imutils.imclearborder(imgBW, 15)
-    showImage(imclearborder, debug_level=debug_level,name="Cleared the Border")
-
-    im_opened = imutils.bwareaopen(imclearborder, 200)
-    showImage(im_opened, debug_level=debug_level,name="Opened")
-
-    # apply closing operation using a SE
-    se = cv2.getStructuringElement(cv2.MORPH_RECT, (20, 20))
-    # borderType is constant by default
-    closing = cv2.morphologyEx(im_opened, cv2.MORPH_CLOSE, se, iterations=1)
-    showImage(closing, debug_level=debug_level,name="Img closing")
-
-
-    # extract rectangle properties
-    img_props = imutils.regionprops(closing)
-    contours, area_vec, [cx, cy], rect, ell_rot = img_props
-    box = cv2.boxPoints(rect)
-    box = np.int0(box)
-
-    # width, height = rect[1][0], rect[1][1]
-    # angle = rect[2]
+    # # extract rectangle properties
+    # img_props = imutils.regionprops(im_closed)
+    # contours, area_vec, [cx, cy], rect, ell_rot = img_props
     
-    # if width > height:
-    #     angle = 90 + angle  # Adjust angle
+    # rect = correctRectangle(rect)
 
-    # Draw the rectangle on the original image/copy
-    image_with_rect = cv2.drawContours(image.copy(), [box], 0, (0, 255, 0), 2)
-    # cv2.ellipse(image_with_rect,rect, ell_rot, (128,128,0),2)
-    showImage(image_with_rect, debug_level=debug_level,name="Rectangle")
-
-    # Calculate the rotation matrix
+    # image_with_rect = drawRectanle(DebugLevel.DEBUG, image=image, rect=rect)
     
-    M = cv2.getRotationMatrix2D((cx, cy), rect[2], 1.0)
-    M180 = cv2.getRotationMatrix2D((cx, cy), rect[2] + 180, 1.0)
+    # print("width= ", rect[1][0])
 
-    # M = cv2.getRotationMatrix2D((cx, cy), 180 + ell_rot, 1.0)
-    # M = cv2.getRotationMatrix2D((cx, cy), angle, 1.0)
+    # angle = getCorrectRotationAngle(debug_level, im_closed, cx, cy, rect)
 
-    # Perform the rotation
-    rotated_image = cv2.warpAffine(image, M, image.shape[1::-1])
-    rotated_image_bw = cv2.warpAffine(closing, M, image.shape[1::-1])
-    rotated_image_bw_180 = cv2.warpAffine(closing, M180, image.shape[1::-1])
-
-    # Get the size of the rotated rectangle
-    size = (int(rect[1][0]), int(rect[1][1]))
-
-    # Extract the straightened ROI
-    x, y = np.int0((cx, cy))
-    x -= size[0] // 2
-    y -= size[1] // 2
-    straightened_roi = rotated_image[y:y+size[1], x:x+size[0]]
-    straightened_roi_bw = rotated_image_bw[y:y+size[1], x:x+size[0]]
-    straightened_roi_bw_180 = rotated_image_bw_180[y:y+size[1], x:x+size[0]]
-
-    showImage(image, debug_level=DebugLevel.DEBUG,name="Normal")
-    # showImage(rotated_image, debug_level=DebugLevel.DEBUG,name="Rotated")
-    showImage(straightened_roi, debug_level=debug_level,name="sub image Rotated")
-    showImage(straightened_roi_bw, debug_level=debug_level,name="sub image Rotated")
-    showImage(straightened_roi_bw_180, debug_level=debug_level,name="sub image Rotated")
-
-    straightened_roi_bw, template["img_mask"] = pad_to_center(straightened_roi_bw, template["img_mask"])
-    straightened_roi_bw_180, template["img_mask"] = pad_to_center(straightened_roi_bw_180, template["img_mask"])
-    
-    # test = straightened_roi_bw - template["img_mask"]
-    bitwise_and = cv2.bitwise_and(straightened_roi_bw, template["img_mask"])
-    bitwise_and_180 = cv2.bitwise_and(straightened_roi_bw_180, template["img_mask"])
-
-    showImage(straightened_roi_bw, debug_level=debug_level,name="subtracted template")
-    showImage(template["img_mask"], debug_level=debug_level,name="subtracted template")
-    showImage(bitwise_and, debug_level=debug_level,name="subtracted template")
-    showImage(bitwise_and_180, debug_level=debug_level,name="180 subtracted template")
-
-    print("rotated correctly:", cv2.countNonZero(bitwise_and) > cv2.countNonZero(bitwise_and_180))
-
-    if(cv2.countNonZero(bitwise_and) > cv2.countNonZero(bitwise_and_180)):
-        rotated_image = cv2.warpAffine(image, M, image.shape[1::-1])
-    else:
-        rotated_image = cv2.warpAffine(image, M180, image.shape[1::-1])
-
-    showImage(rotated_image, debug_level=DebugLevel.DEBUG,name="180 subtracted template")
-
-
+    # print("Rect angle ", rect[2])
+    # print("corrected angle ", angle)
+    # img_rotated = rotateImage(debug_level= DebugLevel.DEBUG, image= image, angle=rect[2], center = (cx, cy))
 if __name__ == "__main__":
-    start_pipeline(DebugLevel.PRODUCTION)
+    all_imgs = retrieve_images("Normal")
+
+    for img in all_imgs:
+        start_pipeline(DebugLevel.DEBUG, img = img)
+    
+    # start_pipeline(DebugLevel.PRODUCTION, img ="./img/0-Normal/image_017.jpg")
