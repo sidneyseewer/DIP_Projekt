@@ -1,8 +1,6 @@
 import getImages
-from python.inpection import inspect_image
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
 from enum import Enum
 import python.imutils as imutils
 
@@ -32,12 +30,8 @@ def retrieve_images(subFolder: str = None):
              return imgHandler.get_paths_from_folder(subFolder)
 
 def get_background_image():
-    imgs = retrieve_images("Other")
-    print(imgs)
-    for img in imgs:
-        if "image_100" in img:
-            return img
-    return None
+    return cv2.imread('../img/Other/image_100.jpg')
+
 
 def showImage(img, debug_level = DebugLevel.DEBUG, name = "Image"):
     if img is None:
@@ -93,20 +87,14 @@ def removeSaltPeper(binary_image, min_area_threshold=1000):
 
     return result_image
 
-def start_pipeline(debug_level = DebugLevel.DEBUG, img = None):
-    # Get background
-    background_image_path = get_background_image()
-    if background_image_path is None:
-        print("Could not geet Background Image")
-        return
-    print("Backgournd Image found")
-    background_image = cv2.imread(background_image_path)
+def start_pipeline(debug_level = DebugLevel.DEBUG, img_name = None):
+    background_image = get_background_image()
     showImage(background_image,debug_level=debug_level, name="Background Image")
     # Get image
-    if img is None:
+    if img_name is None:
         normal_imgs = retrieve_images("Normal")
-        img = normal_imgs[1]
-    image = cv2.imread(img)
+        img_name = normal_imgs[1]
+    image = cv2.imread(img_name)
     showImage(image,debug_level=debug_level,name="Image to treat")
     
     # Subtract Background
@@ -133,10 +121,6 @@ def start_pipeline(debug_level = DebugLevel.DEBUG, img = None):
     image_with_rect = cv2.drawContours(image.copy(), [box], 0, (0, 255, 0), 2)
 
     showImage(image_with_rect, debug_level=debug_level,name="Rectangle")
-
-    # Testen ob Funktionen von inpection.py ausführbar sind
-    image_processed, _ = inspect_image(im_opened,None)
-    showImage(image_processed,debug_level=debug_level,name="Processed Image")
 
 if __name__ == "__main__":
     start_pipeline(DebugLevel.DEBUG)

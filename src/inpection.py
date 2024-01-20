@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 import imutils as utils
 import glob
 from python.initdata import initdata
-#import initdata as init
+from pipeline import DebugLevel, start_pipeline
 import random # only used to return random labels
 
 # hook here your function to inspect image and return label for the detected defect
@@ -25,7 +25,7 @@ y_true, y_pred = [], [] # container for ground truth label and predicted label
 
 
 for class_label, defect_type in enumerate(defects):
-    imageDir = "../../img/" + defects[defect_type]['dir']
+    imageDir = "../img/" + defects[defect_type]['dir']
 
     # read all images from folders given in a list
     for imagePath in glob.glob(imageDir + "*.jpg"):
@@ -39,6 +39,7 @@ for class_label, defect_type in enumerate(defects):
         """
         ... perform defect detection here
         """
+        start_pipeline(debug_level=DebugLevel.DEBUG, img_name=imagePath)
         img_processed, predicted_label = inspect_image(img, defects)
         y_pred.append(predicted_label)
         y_true.append(class_label)  # append real class label to true y's
