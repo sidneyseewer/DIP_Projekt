@@ -14,9 +14,14 @@ def inspect_image(img, defects):
 
 
 # read background image for shading correction
-imgbackground = cv2.imread('../../img/Other/image_100.jpg')
-
+imgbackground = cv2.imread('./img/Other/image_100.jpg')
+image = cv2.imread('./img/0-Normal/image_016.jpg')
 template, defects = init.initdata()
+
+cv2.imshow("name",template["img_mask_no_hat"])
+cv2.waitKey()
+
+start_pipeline(image)
 
 do_plot = False # Enable plotting of images which are processed
 
@@ -24,7 +29,7 @@ y_true, y_pred = [], [] # container for ground truth label and predicted label
 
 
 for class_label, defect_type in enumerate(defects):
-    imageDir = "../../img/" + defects[defect_type]['dir']
+    imageDir = "./img/" + defects[defect_type]['dir']
 
     # read all images from folders given in a list
     for imagePath in glob.glob(imageDir + "*.jpg"):
@@ -58,3 +63,4 @@ from sklearn.metrics import accuracy_score, confusion_matrix
 print("Accuracy: ", accuracy_score(y_true, y_pred))
 print("Confusion matrix:\n", confusion_matrix(y_true, y_pred))
 
+    
