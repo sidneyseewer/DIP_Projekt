@@ -19,6 +19,7 @@ def initdata():
     img_mask[img_mask >= 1] = 1
     templatemask = cv2.bitwise_and(alpha_channel, (1-img_mask))
 
+    # templatemask[templatemask >= 1] = 255
     # store template dependent data into a dict
     template = {'img': img,
                 'imgg': imgg,

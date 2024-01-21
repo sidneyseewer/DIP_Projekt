@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from enum import Enum
 import python.imutils as imutils
 import python.initdata as init
+import cvHelper
 
 """
 subfolders = [
@@ -237,25 +238,207 @@ def correctRectangle(rect = None):
         rect = ((rect[0][0], rect[0][1]), (height, width), rect[2] + 90)
     return rect
 
-def getTemplatePart(path = None):
+def getTemplatePart(mask_name = None):
     """
     Extracts a part of the template.
     Param: path to the mask of the needed part. 
     """
     template, defects = init.initdata()
-    mask = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+    template_img_gray = cv2.cvtColor(template["img"], cv2.COLOR_BGR2GRAY)
+    # mask = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
 
-    return cv2.bitwise_and(mask,template['imgg'])
+    return defects[mask_name]['mask'] * template_img_gray
+
+def maskImage(image = None, mask_name = None):
+    template, defects = init.initdata()
+    image, mask = pad_to_center(image, defects[mask_name]['mask'])
+
+    return mask * image
+
+
+def allPossibleRotations(debug_level = DebugLevel.DEBUG, imgg = None, cx = 0, cy = 0, rect = 0):
+    rotated_images = []
+    angle_offset= [0, 180]
+
+    for offset in angle_offset:
+        angle= rect[2] + offset
+        # Calculate the rotation matrix
+        M = cv2.getRotationMatrix2D((cx, cy), angle, 1.0)
+
+        # Perform the rotation
+        rotated_image = cv2.warpAffine(imgg, M, imgg.shape[1::-1])
+        rotated_images.append(rotated_image)
+
+        showImage(rotated_image, debug_level=DebugLevel.DEBUG, name="Rotated " + str(offset))
+    
+    return rotated_images
+
+def rotate_image(image, angle):
+    """
+    Rotate the given image by the specified angle.
+
+    Parameters:
+    image (numpy.ndarray): The input image to be rotated.
+    angle (float): The angle by which the image is to be rotated.
+
+    Returns:
+    numpy.ndarray: The rotated image.
+    """
+
+    # Get the dimensions of the image
+    height, width = image.shape[:2]
+
+    # Calculate the center of the image
+    center = (width / 2, height / 2)
+
+    # Get the rotation matrix using cv2.getRotationMatrix2D
+    rotation_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+
+    # Calculate the size of the new image
+    cos = abs(rotation_matrix[0, 0])
+    sin = abs(rotation_matrix[0, 1])
+    new_width = int((height * sin) + (width * cos))
+    new_height = int((height * cos) + (width * sin))
+
+    # Adjust the rotation matrix to take into account the translation
+    rotation_matrix[0, 2] += (new_width / 2) - center[0]
+    rotation_matrix[1, 2] += (new_height / 2) - center[1]
+
+    # Perform the actual rotation and return the image
+    return cv2.warpAffine(image, rotation_matrix, (new_width, new_height))
+
+
+def matchTemplates(debug_level = DebugLevel.DEBUG, possibleRotations = None):
+    template, defects = init.initdata()
+    template_img_gray = cv2.cvtColor(template["img"], cv2.COLOR_BGR2GRAY)
+    
+    template_part = getTemplatePart('hat')
+    # Find all non-zero pixels
+    non_zero_coords = cv2.findNonZero(template_part)
+
+    # Calculate the bounding rectangle
+    x, y, w, h = cv2.boundingRect(non_zero_coords)
+
+    # Crop the template
+    cropped_template = template_part[y:y+h, x:x+w]
+
+    cropped_template = rotate_image(cropped_template, -5)
+
+    showImage(template_part, debug_level=DebugLevel.DEBUG, name="HAT")
+    showImage(cropped_template, debug_level=DebugLevel.DEBUG, name="HAT")
+    # showImage(cropped_template_rotated, debug_level=DebugLevel.DEBUG, name="rotated HAT")
+
+    for img in possibleRotations:
+
+        # apply normalized cross correlation
+        res = cv2.matchTemplate(img, cropped_template, cv2.TM_CCOEFF)
+        # search for highest match
+        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+        print("Normalized Cross Correlation Coefficients ranges from {} to {}".format(min_val, max_val))
+        # draw correlation results
+        cvHelper.imagesc(res, "Normalized Cross Correlation")
+        cvHelper.plot3d(res, title="Normalized Cross Correlation")
+        # draw rectangle at matching location
+        
+        # max_center = (max_loc[0] - cropped_template.shape[0]//2, max_loc[1] - cropped_template.shape[1]//2)
+        
+        cvHelper.showRectangle(img, max_loc, 5, 5)
+
+def rotateAndCrop(debug_level = DebugLevel.DEBUG, im_closed = None, cx = 0, cy = 0, rect = 0):
+
+    angle_offset= [0, 180]
+    cropped_images = []
+    for offset in angle_offset:
+        angle= rect[2] + offset
+        # Calculate the rotation matrix
+        M = cv2.getRotationMatrix2D((cx, cy), angle, 1.0)
+
+        # Perform the rotation
+        rotated_image_bw = cv2.warpAffine(im_closed, M, im_closed.shape[1::-1])
+
+        # Get the size of the rotated rectangle
+        size = (int(rect[1][0]), int(rect[1][1]))
+
+        # Extract the straightened ROI
+        x, y = np.int0((cx, cy))
+        x -= size[0] // 2
+        y -= size[1] // 2
+        straightened_roi_bw = rotated_image_bw[y:y+size[1], x:x+size[0]]
+        cropped_images.append(straightened_roi_bw)
+        showImage(straightened_roi_bw, debug_level=DebugLevel.DEBUG,name="Rotate and crop" + str(offset))
+    
+    return cropped_images
+
+def getROI(image = None):
+    template, defects = init.initdata()
+
+    print(image.shape)
+    print(template["img_mask"].shape)
+    image,template["img_mask"] =  pad_to_center(image, template["img_mask"])
+    print(image.shape)
+    print(template["img_mask"].shape)
+    # showImage(template["img_mask"], debug_level=DebugLevel.DEBUG,name="image_mask")
+    bitwise_and = cv2.bitwise_and(image, template["img_mask"])
+    showImage(image, debug_level=DebugLevel.DEBUG,name="Image")
+    showImage(bitwise_and, debug_level=DebugLevel.DEBUG,name = "ROI")
+
+    return bitwise_and
+
+def matchTemplate(image = None, template = None):
+    # apply normalized cross correlation
+    res = cv2.matchTemplate(image, template, cv2.TM_CCOEFF)
+    # search for highest match
+    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+    print("Normalized Cross Correlation Coefficients ranges from {} to {}".format(min_val, max_val))
+    # draw correlation results
+    cvHelper.imagesc(res, "Normalized Cross Correlation")
+    cvHelper.plot3d(res, title="Normalized Cross Correlation")
+    # draw rectangle at matching location
+        
+    # max_center = (max_loc[0] - cropped_template.shape[0]//2, max_loc[1] - cropped_template.shape[1]//2)
+        
+    cvHelper.showRectangle(image, max_loc, 5, 5)
+
+def testShit():
+
+    # ' C:\development\Hagenberg\DIP\Exercises\unit05\unit05\pics\hat.jpg'
+    # "C:\development\Hagenberg\DIP\DIP_Projekt\img\templates\image_016.png"
+    # template_img_gray = cv2.imread('C:/development/Hagenberg/DIP/DIP_Projekt/img/templates/image_016.png', cv2.IMREAD_GRAYSCALE)
+    template_img_gray = cv2.imread('C:/development/Hagenberg/DIP/DIP_Projekt/img/templates/template.png', cv2.IMREAD_GRAYSCALE)
+    # template_mask = cv2.imread('C:/development/Hagenberg/DIP/DIP_Projekt/img/templates/mask_body.png', cv2.IMREAD_UNCHANGED)
+    img_gray = cv2.imread('C:/development/Hagenberg/DIP/DIP_Projekt/img/templates/LegoBackgroundTest2.png', cv2.IMREAD_GRAYSCALE)
+    # cropped_template_gray = cv2.imread('C:/development/Hagenberg/DIP/Exercises/unit05/unit05/pics/hat.jpg', cv2.IMREAD_GRAYSCALE)
+
+    template, defects = init.initdata()
+    template_mask = defects['body print']['mask']
+
+    showImage(template_img_gray, debug_level=DebugLevel.DEBUG, name="template")
+    showImage(img_gray, debug_level=DebugLevel.DEBUG, name="imgg")
+
+    # apply zero-mean cross correlation
+    res = cv2.matchTemplate(img_gray, template_img_gray, cv2.TM_CCOEFF, mask=template_mask)
+    # search for highest match
+    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+    print("Zero-Mean Cross Correlation Coefficients ranges from {} to {}".format(min_val, max_val))
+    # draw correlation results
+    cvHelper.imagesc(res, "Zero-Mean Cross Correlation")
+    cvHelper.plot3d(res, title="Zero-Mean Cross Correlation")
+    # draw rectangle at matching location
+    cvHelper.showRectangle(img_gray, max_loc, template_img_gray.shape[0], template_img_gray.shape[1])
+
+
 
 def start_pipeline(debug_level = DebugLevel.DEBUG, img = None):
 
     # extract part of template
-    template, defects = init.initdata()
-    hat_template = getTemplatePart("./img/templates/mask_hat.png")
-    cv2.imshow("img0",template['imgg'])
-    cv2.imshow("hat_template",hat_template)
+    # template, defects = init.initdata()
+    # hat_template = getTemplatePart("./img/templates/mask_hat.png")
     
-    cv2.waitKey()
+    # cv2.imshow("mask",template['mask'])
+    # cv2.imshow("img0",template['imgg'])
+    # cv2.imshow("hat_template",hat_template)
+    
+    # cv2.waitKey()
 
     # Get background
     background_image_path = get_background_image()
@@ -270,6 +453,7 @@ def start_pipeline(debug_level = DebugLevel.DEBUG, img = None):
         normal_imgs = retrieve_images("All")
         img = normal_imgs[9]
     image = cv2.imread(img)
+    imgg = cv2.imread(img, cv2.IMREAD_GRAYSCALE)
 
     showImage(image,debug_level=debug_level,name="Image to treat")
     
@@ -279,25 +463,130 @@ def start_pipeline(debug_level = DebugLevel.DEBUG, img = None):
     im_opened = opening(debug_level, imclearborder)
     im_closed = closing(debug_level= DebugLevel.DEBUG, im_opened=im_opened, SE_size=20)
 
-    # # extract rectangle properties
-    # img_props = imutils.regionprops(im_closed)
-    # contours, area_vec, [cx, cy], rect, ell_rot = img_props
+    # extract rectangle properties
+    img_props = imutils.regionprops(im_closed)
+    contours, area_vec, [cx, cy], rect, ell_rot = img_props
     
-    # rect = correctRectangle(rect)
+    rect = correctRectangle(rect)
 
-    # image_with_rect = drawRectanle(DebugLevel.DEBUG, image=image, rect=rect)
+    image_with_rect = drawRectanle(DebugLevel.DEBUG, image=image, rect=rect)
     
+    print("width= ", rect[1][0])
+
+
+    # possibleRotations = allPossibleRotations(debug_level=DebugLevel.DEBUG, imgg=imgg, cx=cx, cy=cy, rect=rect)
+    # getROI(imgg=possibleRotations[0])
+    # getTemplatePart()
+
+    # testShit(possibleRotations[0])
+
+    # print(possibleRotations)
+    
+    # matchTemplates(debug_level=debug_level, possibleRotations=possibleRotations)
+
+    angle = getCorrectRotationAngle(debug_level, im_closed, cx, cy, rect)
+
+    # print("Rect angle ", rect[2])
+    # print("corrected angle ", angle)
+    # img_rotated = rotateImage(debug_level= DebugLevel.DEBUG, image= image, angle=rect[2], center = (cx, cy))
+
+
+
+def new_pipeline(debug_level = DebugLevel.DEBUG, img = None):
+    # Get background
+    background_image_path = get_background_image()
+    if background_image_path is None:
+        print("Could not geet Background Image")
+        return
+    print("Backgournd Image found")
+    background_image = cv2.imread(background_image_path)
+    # Get image
+    if img is None:
+        normal_imgs = retrieve_images("All")
+        img = normal_imgs[9]
+    image = cv2.imread(img)
+    imgg = cv2.imread(img, cv2.IMREAD_GRAYSCALE)
+
+    showImage(image,debug_level=debug_level,name="Image to treat")
+    showImage(background_image,debug_level=debug_level,name="Background")
+    
+    img_no_background = subtractBackground(debug_level, image, background_image)
+    imgBW = convertToBW(debug_level, img_no_background)
+    imclearborder = clearBorder(debug_level, imgBW)
+    im_opened = opening(debug_level, imclearborder)
+    im_closed = closing(debug_level= DebugLevel.DEBUG, im_opened=im_opened, SE_size=20)
+
+    # extract rectangle properties
+    img_props = imutils.regionprops(im_closed)
+    contours, area_vec, [cx, cy], rect, ell_rot = img_props
+    
+    rect = correctRectangle(rect)
+
+    image_with_rect = drawRectanle(DebugLevel.DEBUG, image=image, rect=rect)
+     
+    # getCorrectRotationAngle(debug_level=debug_level, im_closed=im_closed, cx=cx, cy=cy, rect=rect)
+
+    cropped_images = rotateAndCrop(debug_level = DebugLevel.DEBUG, im_closed = img_no_background, cx = cx, cy = cy, rect = rect)
+    # # get ROI (!!use correct layer!!)
+    # roi = getROI(cropped_images[0][:,:,2])
+    template_part = getTemplatePart("body print")
+    showImage(template_part,debug_level=debug_level,name="template part")
+    
+    im_gray = cv2.cvtColor(cropped_images[0], cv2.COLOR_BGR2GRAY)
+    showImage(im_gray,debug_level=debug_level,name="im_gray")
+    
+    im_gray_mask = maskImage(im_gray, "body print")
+    showImage(im_gray_mask,debug_level=debug_level,name="im_gray_mask")
+    # # Find all non-zero pixels
+    # non_zero_coords = cv2.findNonZero(template_part)
+
+    # # Calculate the bounding rectangle
+    # x, y, w, h = cv2.boundingRect(non_zero_coords)
+
+    # # Crop the template
+    # template_part = template_part[y:y+h, x:x+w]
+
+    # template_part = cv2.imread('C:/development/Hagenberg/DIP/DIP_Projekt/img/templates/template_body.jpg', cv2.IMREAD_GRAYSCALE)
+    # template_part = getROI(template_part)
+
+    # print(roi.shape)
+    # print(template_part.shape)
+    
+
+    # showImage(template_part,debug_level=debug_level,name="template part")
+
+    matchTemplate(im_gray_mask, template_part)
+
+    # template_part = cv2.imread('C:/development/Hagenberg/DIP/DIP_Projekt/img/templates/template2.png', cv2.IMREAD_GRAYSCALE)
+    # roi = cv2.imread('C:/development/Hagenberg/DIP/DIP_Projekt/img/templates/LegoBackgroundTest2.png', cv2.IMREAD_GRAYSCALE)
+    
+    # matchTemplate(roi, template_part)
+
+
     # print("width= ", rect[1][0])
+
+    # possibleRotations = allPossibleRotations(debug_level=DebugLevel.DEBUG, imgg=imgg, cx=cx, cy=cy, rect=rect)
+    # getROI(imgg=possibleRotations[0])
+    # getTemplatePart()
+
+    # testShit(possibleRotations[0])
+
+    # print(possibleRotations)
+    
+    # matchTemplates(debug_level=debug_level, possibleRotations=possibleRotations)
 
     # angle = getCorrectRotationAngle(debug_level, im_closed, cx, cy, rect)
 
     # print("Rect angle ", rect[2])
     # print("corrected angle ", angle)
     # img_rotated = rotateImage(debug_level= DebugLevel.DEBUG, image= image, angle=rect[2], center = (cx, cy))
-if __name__ == "__main__":
-    all_imgs = retrieve_images("Normal")
 
-    for img in all_imgs:
-        start_pipeline(DebugLevel.DEBUG, img = img)
+if __name__ == "__main__":
+    # all_imgs = retrieve_images("Normal")
+    # img = cv2.imread("./img/templates/image_016.png", cv2.IMREAD_GRAYSCALE)
+    # for img in all_imgs:
+    #     start_pipeline(DebugLevel.PRODUCTION, img = img)
     
-    # start_pipeline(DebugLevel.PRODUCTION, img ="./img/0-Normal/image_017.jpg")
+    # start_pipeline(DebugLevel.PRODUCTION, img ="./img/templates/image_016_normal.png")
+    # new_pipeline(DebugLevel.DEBUG, img ="./img/templates/image_016_normal.jpg")
+    testShit()
