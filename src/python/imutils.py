@@ -96,7 +96,7 @@ def regionprops(imgbw):
    if 0:
        cv2.imshow('dbg', cv2.ellipse(image, ellipse,(128,128,0),2))
 
-   return (len(contours)-1), area_vec[idx], [cx,cy], rect, ellipse[2]
+   return (len(contours)-1), area_vec[idx], [cx,cy], rect, ellipse
 
 def rotate_around_point(vec, angle, point):
     """ Rotate an image around"""
