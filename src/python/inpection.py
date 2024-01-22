@@ -5,11 +5,18 @@ import imutils as utils
 import glob
 import initdata as init
 import random # only used to return random labels
+import sys
+import os
+
+# Add the parent directory to PYTHONPATH
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+import pipeline_clean
 
 # hook here your function to inspect image and return label for the detected defect
 def inspect_image(img, defects):
-    img_processed = img
-    predicted_label = random.randrange(0,7)
+    img_processed, predicted_label = pipeline_clean.pipeline(img = img)
     return img_processed, predicted_label
 
 

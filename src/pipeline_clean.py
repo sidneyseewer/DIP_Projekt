@@ -200,12 +200,11 @@ def getAllTemplateParts():
     """
     template, defects = init.initdata()
     template_parts = []
-    for defect_key, defect_info in defects.items():
+    for class_label, defect_type in enumerate(defects):
 
         template_img_gray = cv2.cvtColor(template["img"], cv2.COLOR_BGR2GRAY)
         
-        # dunno if first part is needed 
-        template_parts.append((defect_info['mask'] * template_img_gray, defect_info['mask']))
+        template_parts.append((class_label,template_img_gray, defects[defect_type]["mask"]))
 
     return template_parts
 
@@ -249,20 +248,20 @@ def detectDefects(image, matching_thresh):
     detected_parts = []
     detected_defects = []
         
-    for template_part, template_mask in template_parts:
-        cv2.imshow("template_part", template_part)
+    for template_label, template_img_gray, template_mask in template_parts:
+        # cv2.imshow("template_part", template_img_gray)
 
-        temp_max_val = matchTemplateWithVariation(image, template_part, template_mask, 5)
+        temp_max_val = matchTemplateWithVariation(image, template_img_gray, template_mask, 5)
         # temp_max_val = matchTemplate(image, template_part, template_mask)
 
         if(temp_max_val == float('inf')):
-            print("============= WARNING: max value inf??? =============")
-            detected_defects.append(template_part)
+            print("============= WARNING: how to handle max_value inf??? =============")
+            # detected_defects.append(template_label, template_img_gray)
         elif(temp_max_val >= matching_thresh):
             # todo: need name here
-            detected_parts.append(template_part)
+            detected_parts.append((template_label, temp_max_val))
         else:
-            detected_defects.append(template_part)
+            detected_defects.append((template_label, temp_max_val))
         
     return (detected_parts, detected_defects)
 
@@ -271,6 +270,8 @@ def detectBestImage(images_corrected_angle, matching_thresh):
     best_image = None
     detected_parts_count = 0
     detected_defect_count = 0
+    detected_parts = []
+    detected_defects = []
 
     for image in images_corrected_angle:
         (temp_detected_parts, temp_detected_defects) = detectDefects(image, matching_thresh)
@@ -279,10 +280,15 @@ def detectBestImage(images_corrected_angle, matching_thresh):
         if(size > detected_parts_count):
             best_image = image
             detected_parts_count = size
+            detected_parts = temp_detected_parts
+            detected_defects = temp_detected_defects
 
-    return (best_image, detected_parts_count)
+    return (best_image, detected_parts_count, detected_parts, detected_defects)
 
-def pipeline(debug_level = DebugLevel.PRODUCTION, img = None):
+def pipeline(img = None, defects = None):
+    
+    debug_level = DebugLevel.PRODUCTION
+
     print("PIPELINE STARTED")
     imgbackground = cv2.imread('./img/Other/image_100.jpg')
     SE_size = 5
@@ -353,7 +359,7 @@ def pipeline(debug_level = DebugLevel.PRODUCTION, img = None):
 
     print("TEMPLATE MATCHING")
 
-    (best_image, detected_parts_count) = detectBestImage(images_corrected_angle, matching_thresh)
+    (best_image, detected_parts_count, detected_parts, detected_defects) = detectBestImage(images_corrected_angle, matching_thresh)
     print("BEST IMAGE PARTS DETECTED: " + str(detected_parts_count))
     
     if(best_image is not None):
@@ -364,8 +370,16 @@ def pipeline(debug_level = DebugLevel.PRODUCTION, img = None):
     else:
         print("===========  NOT INDY  ===========")
 
-    print("END")
+    max_defect_label = None
+    max_defect_val = 0
 
+    for defect_label, defect_val in detected_defects:
+        if(defect_val > max_defect_val):
+            max_defect_label = defect_label
+            max_defect_val = defect_val
+
+    print("END")
+    return img, max_defect_label
 
 if __name__ == "__main__":
     imageDir = "./img/All/"
@@ -373,7 +387,7 @@ if __name__ == "__main__":
     for imagePath in glob.glob(imageDir + "*.jpg"):
         print("IMAGE: " +str(imagePath) + "\n")
         img = cv2.imread(imagePath)
-        pipeline(DebugLevel.PRODUCTION, img = img)
+        pipeline(img = img)
 
 
 # "C:\development\Hagenberg\DIP\DIP_Projekt\img\All\image_100.jpg"
