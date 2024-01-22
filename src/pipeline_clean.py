@@ -148,6 +148,7 @@ def matchTemplate(image = None, template_image = None, template_mask = None):
     # search for highest match
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
     print("Zero-Mean Cross Correlation Coefficients ranges from {} to {}".format(min_val, max_val))
+    # cvHelper.showRectangle(image, max_loc, template_image.shape[0], template_image.shape[1])
 
     return max_val
 
@@ -181,15 +182,15 @@ def pipeline(debug_level = DebugLevel.PRODUCTION, img = None):
     cv2.imshow("img_no_background_binary",img_no_background_binary)
     img_no_background_binary_floodFill = floodFill(img_no_background_binary)
     cv2.imshow("img_no_background_binary_floodFill",img_no_background_binary_floodFill)
-    img_no_background_binary_floodFill_no_border = clearBorder(debug_level, img_no_background_binary_floodFill, clearBorderRadius)
-    cv2.imshow("img_no_background_binary_floodFill_no_border",img_no_background_binary_floodFill_no_border)
-    img_no_background_binary_floodFill_no_border_closed = closing(debug_level= DebugLevel.PRODUCTION, image=img_no_background_binary_floodFill_no_border, SE_size=SE_size)
-    cv2.imshow("img_no_background_binary_floodFill_no_border_opened_closed", img_no_background_binary_floodFill_no_border_closed)
-    img_no_background_binary_floodFill_no_border_closed_opened = opening(debug_level, img_no_background_binary_floodFill_no_border_closed, SE_size=SE_size)
-    cv2.imshow("img_no_background_binary_floodFill_no_border_opened",img_no_background_binary_floodFill_no_border_closed_opened)
+    img_no_background_binary_floodFill_opened = opening(debug_level, img_no_background_binary_floodFill, SE_size=SE_size)
+    cv2.imshow("img_no_background_binary_floodFill_opened",img_no_background_binary_floodFill_opened)
+    img_no_background_binary_floodFill_opened_no_border = clearBorder(debug_level, img_no_background_binary_floodFill_opened, clearBorderRadius)
+    cv2.imshow("img_no_background_binary_floodFill_opened_no_border",img_no_background_binary_floodFill_opened_no_border)
+    img_no_background_binary_floodFill_opened_no_border_closed = closing(debug_level= DebugLevel.PRODUCTION, image=img_no_background_binary_floodFill_opened_no_border, SE_size=SE_size)
+    cv2.imshow("img_no_background_binary_floodFill_opened_no_border_closed", img_no_background_binary_floodFill_opened_no_border_closed)
     
 
-    count_non_zero = cv2.countNonZero(img_no_background_binary_floodFill_no_border_closed_opened)
+    count_non_zero = cv2.countNonZero(img_no_background_binary_floodFill_opened_no_border_closed)
     if(count_non_zero <100):
         print("IMAGE EMPTY")
 
@@ -198,7 +199,7 @@ def pipeline(debug_level = DebugLevel.PRODUCTION, img = None):
 
     print("IMAGE OKAY")
     print("LOCATE RECTANGLE")
-    img_props = imutils.regionprops(img_no_background_binary_floodFill_no_border_closed_opened)
+    img_props = imutils.regionprops(img_no_background_binary_floodFill_opened_no_border_closed)
     contours, area_vec, [cx, cy], rect, ellipse = img_props
     
     # ellipse_rotation = ellipse[2]
