@@ -167,10 +167,10 @@ def rotate(image = None, cx = 0, cy = 0, angles = 0, rect = None):
         if( rect is not None):
             # Adjust ROI Size to be at least as big as the template
             width, height = (int(rect[1][0]), int(rect[1][1]))
-            if width < 124:
-                width = 124
-            if height < 200:
-                height = 200
+            if width < 125:
+                width = 125
+            if height < 201:
+                height = 201
             size = (width, height)
 
             # Extract the straightened ROI
@@ -214,6 +214,10 @@ def matchTemplate(image = None, template_image = None, template_mask = None):
     # just for error handling, should never be the case
     if(image.shape[0] < template_image.shape[0] or image.shape[1] < template_image.shape[1]):
         image, _ = pad_to_center(image, template_image)
+
+    # print("image shape " + str(image.shape))
+    # print("template_image shape " + str(template_image.shape))
+    # print("template_mask shape " + str(template_mask.shape))
 
     # apply zero-mean cross correlation
     res = cv2.matchTemplate(image, template_image, cv2.TM_CCOEFF_NORMED, mask=template_mask)
@@ -287,12 +291,14 @@ def detectBestImage(images_corrected_angle, matching_thresh):
 
 def pipeline(img = None, defects = None):
     
+    template, _ = init.initdata()
+
     debug_level = DebugLevel.PRODUCTION
 
     print("PIPELINE STARTED")
     imgbackground = cv2.imread('./img/Other/image_100.jpg')
-    SE_size = 5
-    clearBorderRadius= 10
+    SE_size = 20
+    clearBorderRadius= 5
     matching_thresh = 0.3
 
     print("PREPROCESS IMAGE")
@@ -304,15 +310,15 @@ def pipeline(img = None, defects = None):
     cv2.imshow("img_no_background_binary",img_no_background_binary)
     img_no_background_binary_floodFill = floodFill(img_no_background_binary)
     cv2.imshow("img_no_background_binary_floodFill",img_no_background_binary_floodFill)
-    img_no_background_binary_floodFill_opened = opening(debug_level, img_no_background_binary_floodFill, SE_size=SE_size)
-    cv2.imshow("img_no_background_binary_floodFill_opened",img_no_background_binary_floodFill_opened)
-    img_no_background_binary_floodFill_opened_no_border = clearBorder(debug_level, img_no_background_binary_floodFill_opened, clearBorderRadius)
-    cv2.imshow("img_no_background_binary_floodFill_opened_no_border",img_no_background_binary_floodFill_opened_no_border)
-    img_no_background_binary_floodFill_opened_no_border_closed = closing(debug_level= DebugLevel.PRODUCTION, image=img_no_background_binary_floodFill_opened_no_border, SE_size=SE_size)
-    cv2.imshow("img_no_background_binary_floodFill_opened_no_border_closed", img_no_background_binary_floodFill_opened_no_border_closed)
+    # img_no_background_binary_floodFill_opened = opening(debug_level, img_no_background_binary_floodFill, SE_size=SE_size)
+    # cv2.imshow("img_no_background_binary_floodFill_opened",img_no_background_binary_floodFill_opened)
+    img_no_background_binary_floodFill_no_border = clearBorder(debug_level, img_no_background_binary_floodFill, clearBorderRadius)
+    cv2.imshow("img_no_background_binary_floodFill_opened_no_border",img_no_background_binary_floodFill_no_border)
+    # img_no_background_binary_floodFill_opened_no_border_closed = dilate(debug_level= DebugLevel.PRODUCTION, image=img_no_background_binary_floodFill_opened_no_border, SE_size=SE_size)
+    # cv2.imshow("img_no_background_binary_floodFill_opened_no_border_closed", img_no_background_binary_floodFill_opened_no_border_closed)
     
 
-    count_non_zero = cv2.countNonZero(img_no_background_binary_floodFill_opened_no_border_closed)
+    count_non_zero = cv2.countNonZero(img_no_background_binary_floodFill_no_border)
     if(count_non_zero <100):
         print("IMAGE EMPTY")
 
@@ -321,7 +327,7 @@ def pipeline(img = None, defects = None):
 
     print("IMAGE OKAY")
     print("LOCATE RECTANGLE")
-    img_props = imutils.regionprops(img_no_background_binary_floodFill_opened_no_border_closed)
+    img_props = imutils.regionprops(img_no_background_binary_floodFill_no_border)
     contours, area_vec, [cx, cy], rect, ellipse = img_props
     
     # ellipse_rotation = ellipse[2]
@@ -333,14 +339,11 @@ def pipeline(img = None, defects = None):
     img_no_background_gray_ellipse = draw_ellipse(img_no_background_gray_rectangle, ellipse)
     # cv2.imshow("img_no_background_gray_rectangle", img_no_background_gray_rectangle)
     cv2.imshow("img_no_background_gray_ellipse", img_no_background_gray_ellipse)
-    
-    # cv2.imshow("img",img)
-    # print("\n")
-    # cv2.waitKey()
+
 
     print("ROTATE IMAGE")
     # also correct if rectangle is upside down
-    angles = [rect[2], ellipse[2], rect[2] + 180, ellipse[2] + 180]
+    angles = [ellipse[2], ellipse[2] + 180]
     
     # normal and cropped images are returned
     images_corrected_angle, cropped_images_corrected_angle = rotate(image = img_no_background_gray, cx = cx, cy = cy, angles = angles, rect = rect)
@@ -350,12 +353,34 @@ def pipeline(img = None, defects = None):
     # comment out next line if thats a problem
     images_corrected_angle = cropped_images_corrected_angle
     
+    if(images_corrected_angle[0].shape[0] <= 0):
+        print("RIP IMAGE")
+
+        return
 
     # show corrected angles
     cv2.imshow("images_corrected_angle[0]", images_corrected_angle[0])
     cv2.imshow("images_corrected_angle[1]", images_corrected_angle[1])
-    cv2.imshow("images_corrected_angle[2]", images_corrected_angle[2])
-    cv2.imshow("images_corrected_angle[3]", images_corrected_angle[3])
+
+    print("GET CORRECT ROTATION")
+    
+    images_corrected_angle_max_val = 0
+    better_image = images_corrected_angle[0]
+
+    for image in images_corrected_angle:
+
+        template_gray = cv2.cvtColor(template["img"], cv2.COLOR_BGR2GRAY )
+        cv2.imshow("iamge to proc", image)
+        cv2.imshow("template[mask]", template["mask"])
+        cv2.imshow("template_gray", template_gray)
+        max_val = matchTemplateWithVariation(image, template_gray, template["mask"], 5)
+
+        if(max_val > images_corrected_angle_max_val):
+            images_corrected_angle_max_val = max_val
+            better_image = image
+
+    # Rotation should be fixed here (at least for all Normal indys)
+    cv2.imshow("BETTER IMAGE", better_image)
 
     print("TEMPLATE MATCHING")
 
@@ -363,6 +388,7 @@ def pipeline(img = None, defects = None):
     print("BEST IMAGE PARTS DETECTED: " + str(detected_parts_count))
     
     if(best_image is not None):
+        best_image = cv2.resize(best_image, (best_image.shape[1] * 2, best_image.shape[0] * 2), interpolation=cv2.INTER_AREA)
         cv2.imshow("BEST IMAGE", best_image)
     
     if(detected_parts_count >= 2):
@@ -382,7 +408,7 @@ def pipeline(img = None, defects = None):
     return img, max_defect_label
 
 if __name__ == "__main__":
-    imageDir = "./img/All/"
+    imageDir = "./img/0-Normal/"
 
     for imagePath in glob.glob(imageDir + "*.jpg"):
         print("IMAGE: " +str(imagePath) + "\n")
