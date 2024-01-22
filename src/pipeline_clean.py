@@ -164,20 +164,21 @@ def rotate(image = None, cx = 0, cy = 0, angles = 0, rect = None):
         rotated_image_bw = cv2.warpAffine(image, M, image.shape[1::-1])
         images.append(rotated_image_bw)
 
-        # Adjust ROI Size to be at least as big as the template
-        width, height = (int(rect[1][0]), int(rect[1][1]))
-        if width < 124:
-            width = 124
-        if height < 200:
-            height = 200
-        size = (width, height)
+        if( rect is not None):
+            # Adjust ROI Size to be at least as big as the template
+            width, height = (int(rect[1][0]), int(rect[1][1]))
+            if width < 124:
+                width = 124
+            if height < 200:
+                height = 200
+            size = (width, height)
 
-        # Extract the straightened ROI
-        x, y = np.int0((cx, cy))
-        x -= size[0] // 2
-        y -= size[1] // 2
-        straightened_roi_bw = rotated_image_bw[y:y+size[1], x:x+size[0]]
-        cropped_images.append(straightened_roi_bw)
+            # Extract the straightened ROI
+            x, y = np.int0((cx, cy))
+            x -= size[0] // 2
+            y -= size[1] // 2
+            straightened_roi_bw = rotated_image_bw[y:y+size[1], x:x+size[0]]
+            cropped_images.append(straightened_roi_bw)
         
     return images, cropped_images
 
@@ -224,6 +225,25 @@ def matchTemplate(image = None, template_image = None, template_mask = None):
 
     return max_val
 
+def matchTemplateWithVariation(image, template_part, template_mask, variation):
+    variation_max_val = 0
+    angles = []
+    for angle in range(-variation, variation, 1):
+        angles.append(angle)
+
+    template_part_variations, _ = rotate(template_part, template_part.shape[0] // 2, template_part.shape[1] // 2, angles)
+    template_mask_variations, _ = rotate(template_mask, template_mask.shape[0] // 2, template_mask.shape[1] // 2, angles)
+
+    for i in range(0, 2* variation, 1):
+        temp_max_val = matchTemplate(image, template_part_variations[i], template_mask_variations[i])
+
+        if(temp_max_val == float('inf')):
+            print("============= WARNING: max value inf??? =============")
+        elif(temp_max_val >= variation_max_val):
+            variation_max_val = temp_max_val
+    
+    return variation_max_val
+
 def detectDefects(image, matching_thresh):
     template_parts = getAllTemplateParts()
     detected_parts = []
@@ -231,7 +251,9 @@ def detectDefects(image, matching_thresh):
         
     for template_part, template_mask in template_parts:
         cv2.imshow("template_part", template_part)
-        temp_max_val = matchTemplate(image, template_part, template_mask)
+
+        temp_max_val = matchTemplateWithVariation(image, template_part, template_mask, 5)
+        # temp_max_val = matchTemplate(image, template_part, template_mask)
 
         if(temp_max_val == float('inf')):
             print("============= WARNING: max value inf??? =============")
@@ -265,7 +287,7 @@ def pipeline(debug_level = DebugLevel.PRODUCTION, img = None):
     imgbackground = cv2.imread('./img/Other/image_100.jpg')
     SE_size = 5
     clearBorderRadius= 10
-    matching_thresh = 0.5
+    matching_thresh = 0.3
 
     print("PREPROCESS IMAGE")
     img_no_background = subtractBackground(debug_level, img, imgbackground)
@@ -320,7 +342,7 @@ def pipeline(debug_level = DebugLevel.PRODUCTION, img = None):
     # use cropped for further processing
     # CROPPED currently results in worse results
     # comment out next line if thats a problem
-    # images_corrected_angle = cropped_images_corrected_angle
+    images_corrected_angle = cropped_images_corrected_angle
     
 
     # show corrected angles
