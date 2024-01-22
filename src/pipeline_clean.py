@@ -117,18 +117,69 @@ def floodFill(binary_image = None):
 
     return img_out
 
-def rotate(image = None, cx = 0, cy = 0, angles = 0):
+def pad_to_center(image1, image2):
+    """
+    Pad the smaller image among image1 and image2 to match the size of the larger one,
+    keeping the original image centered.
+
+    Parameters:
+    image1 (numpy.ndarray): First input image.
+    image2 (numpy.ndarray): Second input image.
+
+    Returns:
+    tuple: A tuple containing the possibly padded images (image1, image2).
+    """
+
+    h1, w1 = image1.shape[:2]
+    h2, w2 = image2.shape[:2]
+
+    # Determine padding for height and width for each image
+    pad_h1 = max(h2 - h1, 0)
+    pad_w1 = max(w2 - w1, 0)
+    pad_h2 = max(h1 - h2, 0)
+    pad_w2 = max(w1 - w2, 0)
+
+    # Distribute padding evenly on both sides
+    pad_top1, pad_bot1 = pad_h1 // 2, pad_h1 - pad_h1 // 2
+    pad_left1, pad_right1 = pad_w1 // 2, pad_w1 - pad_w1 // 2
+    pad_top2, pad_bot2 = pad_h2 // 2, pad_h2 - pad_h2 // 2
+    pad_left2, pad_right2 = pad_w2 // 2, pad_w2 - pad_w2 // 2
+
+    # Pad the images accordingly
+    if pad_h1 > 0 or pad_w1 > 0:
+        image1 = cv2.copyMakeBorder(image1, pad_top1, pad_bot1, pad_left1, pad_right1, cv2.BORDER_CONSTANT, value=[0, 0, 0])
+    if pad_h2 > 0 or pad_w2 > 0:
+        image2 = cv2.copyMakeBorder(image2, pad_top2, pad_bot2, pad_left2, pad_right2, cv2.BORDER_CONSTANT, value=[0, 0, 0])
+
+    return image1, image2
+
+def rotate(image = None, cx = 0, cy = 0, angles = 0, rect = None):
     images = []
+    cropped_images = []
     for angle in angles:
         # Calculate the rotation matrix
         M = cv2.getRotationMatrix2D((cx, cy), angle, 1.0)
 
         # Perform the rotation
         rotated_image_bw = cv2.warpAffine(image, M, image.shape[1::-1])
-
         images.append(rotated_image_bw)
+
+        # Adjust ROI Size to be at least as big as the template
+        width, height = (int(rect[1][0]), int(rect[1][1]))
+        if width < 124:
+            width = 124
+        if height < 200:
+            height = 200
+        size = (width, height)
+
+        # Extract the straightened ROI
+        x, y = np.int0((cx, cy))
+        x -= size[0] // 2
+        y -= size[1] // 2
+        straightened_roi_bw = rotated_image_bw[y:y+size[1], x:x+size[0]]
+        cropped_images.append(straightened_roi_bw)
         
-    return images
+    return images, cropped_images
 
 def getTemplatePart(mask_name = None):
     """
@@ -158,6 +209,12 @@ def getAllTemplateParts():
     return template_parts
 
 def matchTemplate(image = None, template_image = None, template_mask = None):
+
+    # do not pad template.. if not needed if return values is not used
+    # just for error handling, should never be the case
+    if(image.shape[0] < template_image.shape[0] or image.shape[1] < template_image.shape[1]):
+        image, _ = pad_to_center(image, template_image)
+
     # apply zero-mean cross correlation
     res = cv2.matchTemplate(image, template_image, cv2.TM_CCOEFF_NORMED, mask=template_mask)
     # search for highest match
@@ -256,13 +313,21 @@ def pipeline(debug_level = DebugLevel.PRODUCTION, img = None):
     print("ROTATE IMAGE")
     # also correct if rectangle is upside down
     angles = [rect[2], ellipse[2], rect[2] + 180, ellipse[2] + 180]
-    images_corrected_angle = rotate(image = img_no_background_gray, cx = cx, cy = cy, angles = angles)
     
+    # normal and cropped images are returned
+    images_corrected_angle, cropped_images_corrected_angle = rotate(image = img_no_background_gray, cx = cx, cy = cy, angles = angles, rect = rect)
+    
+    # use cropped for further processing
+    # CROPPED currently results in worse results
+    # comment out next line if thats a problem
+    # images_corrected_angle = cropped_images_corrected_angle
+    
+
     # show corrected angles
-    # cv2.imshow("images_corrected_angle[0]", images_corrected_angle[0])
-    # cv2.imshow("images_corrected_angle[1]", images_corrected_angle[1])
-    # cv2.imshow("images_corrected_angle[2]", images_corrected_angle[2])
-    # cv2.imshow("images_corrected_angle[3]", images_corrected_angle[3])
+    cv2.imshow("images_corrected_angle[0]", images_corrected_angle[0])
+    cv2.imshow("images_corrected_angle[1]", images_corrected_angle[1])
+    cv2.imshow("images_corrected_angle[2]", images_corrected_angle[2])
+    cv2.imshow("images_corrected_angle[3]", images_corrected_angle[3])
 
     print("TEMPLATE MATCHING")
 
