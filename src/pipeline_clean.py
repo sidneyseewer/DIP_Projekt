@@ -142,9 +142,24 @@ def getTemplatePart(mask_name = None):
     # dunno if first part is needed 
     return (defects[mask_name]['mask'] * template_img_gray, defects[mask_name]['mask'])
 
+def getAllTemplateParts():
+    """
+    Extracts aall parts of the template.
+    """
+    template, defects = init.initdata()
+    template_parts = []
+    for defect_key, defect_info in defects.items():
+
+        template_img_gray = cv2.cvtColor(template["img"], cv2.COLOR_BGR2GRAY)
+        
+        # dunno if first part is needed 
+        template_parts.append((defect_info['mask'] * template_img_gray, defect_info['mask']))
+
+    return template_parts
+
 def matchTemplate(image = None, template_image = None, template_mask = None):
     # apply zero-mean cross correlation
-    res = cv2.matchTemplate(image, template_image, cv2.TM_CCOEFF, mask=template_mask)
+    res = cv2.matchTemplate(image, template_image, cv2.TM_CCOEFF_NORMED, mask=template_mask)
     # search for highest match
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
     print("Zero-Mean Cross Correlation Coefficients ranges from {} to {}".format(min_val, max_val))
@@ -152,26 +167,48 @@ def matchTemplate(image = None, template_image = None, template_mask = None):
 
     return max_val
 
-def getBestImage(images, template_part, template_mask):
-    max_val = 0
-    best_image = None
-
-    for image in images:
+def detectDefects(image, matching_thresh):
+    template_parts = getAllTemplateParts()
+    detected_parts = []
+    detected_defects = []
+        
+    for template_part, template_mask in template_parts:
+        cv2.imshow("template_part", template_part)
         temp_max_val = matchTemplate(image, template_part, template_mask)
 
-        if(temp_max_val > max_val):
-            max_val = temp_max_val
+        if(temp_max_val == float('inf')):
+            print("============= WARNING: max value inf??? =============")
+            detected_defects.append(template_part)
+        elif(temp_max_val >= matching_thresh):
+            # todo: need name here
+            detected_parts.append(template_part)
+        else:
+            detected_defects.append(template_part)
+        
+    return (detected_parts, detected_defects)
+
+
+def detectBestImage(images_corrected_angle, matching_thresh):
+    best_image = None
+    detected_parts_count = 0
+    detected_defect_count = 0
+
+    for image in images_corrected_angle:
+        (temp_detected_parts, temp_detected_defects) = detectDefects(image, matching_thresh)
+
+        size = len(temp_detected_parts)
+        if(size > detected_parts_count):
             best_image = image
+            detected_parts_count = size
 
-    return (max_val, best_image)
-
-
+    return (best_image, detected_parts_count)
 
 def pipeline(debug_level = DebugLevel.PRODUCTION, img = None):
     print("PIPELINE STARTED")
     imgbackground = cv2.imread('./img/Other/image_100.jpg')
     SE_size = 5
     clearBorderRadius= 10
+    matching_thresh = 0.5
 
     print("PREPROCESS IMAGE")
     img_no_background = subtractBackground(debug_level, img, imgbackground)
@@ -228,11 +265,17 @@ def pipeline(debug_level = DebugLevel.PRODUCTION, img = None):
     # cv2.imshow("images_corrected_angle[3]", images_corrected_angle[3])
 
     print("TEMPLATE MATCHING")
-    template_part, template_mask = getTemplatePart("body print")
-    cv2.imshow("template_part", template_part)
-    (max_val, best_image) = getBestImage(images_corrected_angle, template_part, template_mask)
+
+    (best_image, detected_parts_count) = detectBestImage(images_corrected_angle, matching_thresh)
+    print("BEST IMAGE PARTS DETECTED: " + str(detected_parts_count))
     
-    cv2.imshow("best_image", best_image)
+    if(best_image is not None):
+        cv2.imshow("BEST IMAGE", best_image)
+    
+    if(detected_parts_count >= 2):
+        print("=========== INDY  FOUND ===========")
+    else:
+        print("===========  NOT INDY  ===========")
 
     print("END")
 
