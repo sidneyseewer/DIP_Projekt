@@ -17,6 +17,11 @@ def initdata():
     # img_mask_no_hat = cv2.imread('./img/templates/match_mask_no_hat.png', cv2.IMREAD_REDUCED_COLOR_2)
     img_mask[img_mask < 1] = 0
     img_mask[img_mask >= 1] = 1
+
+    mask_no_head = cv2.imread('./img/templates/match_mask_no_head.png', 0)
+    mask_no_head[mask_no_head < 1] = 0
+    mask_no_head[mask_no_head >= 1] = 1
+
     templatemask = cv2.bitwise_and(alpha_channel, (1-img_mask))
 
     # templatemask[templatemask >= 1] = 255
@@ -25,6 +30,7 @@ def initdata():
                 'imgg': imgg,
                 'center':templatecenter,
                 'mask': templatemask,
+                'mask_no_head':mask_no_head,
                 'img_mask': imgbw}
 
     # load defects and store them into a dict, which is firstly allocated
