@@ -326,20 +326,10 @@ def pipeline(img = None, defects = None):
     img_no_background = subtractBackground(debug_level, img, imgbackground)
     cv2.imshow("img_no_background",img_no_background)
     img_no_background_gray = cv2.cvtColor(img_no_background, cv2.COLOR_BGR2GRAY)
-    # cv2.imwrite("img_no_background_gray.jpg", img_no_background_gray)
-    # cv2.imshow("img_no_background_gray",img_no_background_gray)
+    cv2.imshow("img_no_background_gray",img_no_background_gray)
     img_no_background_binary = convertToBinary(debug_level, img_no_background)
-    # cv2.imshow("img_no_background_binary",img_no_background_binary)
     img_no_background_binary_floodFill = floodFill(img_no_background_binary)
-    # cv2.imshow("img_no_background_binary_floodFill",img_no_background_binary_floodFill)
-    # img_no_background_binary_floodFill_opened = opening(debug_level, img_no_background_binary_floodFill, SE_size=SE_size)
-    # cv2.imshow("img_no_background_binary_floodFill_opened",img_no_background_binary_floodFill_opened)
     img_no_background_binary_floodFill_no_border = clearBorder(debug_level, img_no_background_binary_floodFill, clearBorderRadius)
-    # cv2.imshow("img_no_background_binary_floodFill_no_border",img_no_background_binary_floodFill_no_border)
-    # img_no_background_binary_floodFill_opened_no_border_closed = dilate(debug_level= DebugLevel.PRODUCTION, image=img_no_background_binary_floodFill_opened_no_border, SE_size=SE_size)
-    # cv2.imshow("img_no_background_binary_floodFill_opened_no_border_closed", img_no_background_binary_floodFill_opened_no_border_closed)
-    # img_no_background_binary_floodFill_no_border_opened = opening(debug_level, img_no_background_binary_floodFill_no_border, SE_size=SE_size)
-    # cv2.imshow("img_no_background_binary_floodFill_no_border_opened",img_no_background_binary_floodFill_no_border_opened)
     
 
     count_non_zero = cv2.countNonZero(img_no_background_binary_floodFill_no_border)
@@ -355,14 +345,11 @@ def pipeline(img = None, defects = None):
     img_props = imutils.regionprops(img_no_background_binary_floodFill_no_border)
     contours, area_vec, [cx, cy], rect, ellipse = img_props
     
-    # ellipse_rotation = ellipse[2]
-
     print("CORRECT RECTANGLE")
     rect = correct90DegreeRectangle(rect)
     print(rect)
     img_no_background_gray_rectangle = drawRectanle(image=img_no_background_gray, rect=rect)
     img_no_background_gray_ellipse = draw_ellipse(img_no_background_gray_rectangle, ellipse)
-    # cv2.imshow("img_no_background_gray_rectangle", img_no_background_gray_rectangle)
     cv2.imshow("img_no_background_gray_ellipse", img_no_background_gray_ellipse)
 
 
@@ -373,10 +360,6 @@ def pipeline(img = None, defects = None):
     # normal and cropped images are returned
     images_corrected_angle, cropped_images_corrected_angle = rotate(image = img_no_background_gray, cx = cx, cy = cy, angles = angles, rect = rect)
     
-    # cv2.imshow("images_corrected_angle 0", images_corrected_angle[0])
-    # cv2.imshow("cropped_images_corrected_angle 0", cropped_images_corrected_angle[0])
-    # cv2.imshow("images_corrected_angle 1", images_corrected_angle[1])
-    # cv2.imshow("cropped_images_corrected_angle 1", cropped_images_corrected_angle[1])
     # use cropped for further processing
     # CROPPED currently results in worse results
     # comment out next line if thats a problem
@@ -386,10 +369,6 @@ def pipeline(img = None, defects = None):
         print("RIP IMAGE")
 
         return (img, -1)
-
-    # show corrected angles
-    # cv2.imshow("images_corrected_angle[0]", images_corrected_angle[0])
-    # cv2.imshow("images_corrected_angle[1]", images_corrected_angle[1])
 
     print("GET CORRECT ROTATION")
     
@@ -410,16 +389,6 @@ def pipeline(img = None, defects = None):
     mask_no_neck = cv2.bitwise_and(mask_no_head, cv2.bitwise_not(head_mask))
 
     for image in images_corrected_angle:
-
-        # cv2.imshow("hat_mask", hat_mask)
-        # cv2.imshow("body_print_mask", body_print_mask)
-
-        # cv2.imshow("IMAGE TO PROCESS", image)
-        # cv2.imwrite("image_to_process.jpg", image)
-        # cv2.imshow("mask_no_head", mask_no_head)
-        # cv2.imshow("template_gray", template_gray)
-        # cv2.imshow("masked_template", template_gray*mask_no_head)
-
         res = cv2.matchTemplate(image, template_gray, cv2.TM_CCOEFF_NORMED, mask=mask_no_head)
         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
         print("Zero-Mean Cross Correlation Coefficients ranges from {} to {}".format(min_val, max_val))
@@ -431,22 +400,7 @@ def pipeline(img = None, defects = None):
         
         max_val += max_val2
 
-        # max_val = matchTemplateWithVariation(image, template_gray, mask_no_head, 5)
-        # max_val +=  0.3 * matchTemplateWithVariation(image, template_gray, hand_mask, 5)
-        # max_val +=  0.3 * matchTemplateWithVariation(image, template_gray, arm_mask, 5)
-        # max_val +=  0.3 * matchTemplateWithVariation(image, template_gray, leg_mask, 5)
-        # max_val +=  0.3 * matchTemplateWithVariation(image, template_gray, hat_mask, 5)
-        # max_val +=  0.3 * matchTemplateWithVariation(image, template_gray, face_print_mask, 5)
-        # max_val +=  0.3 * matchTemplateWithVariation(image, template_gray, body_print_mask, 5)
-        # max_val +=  0.3 * matchTemplateWithVariation(image, template_gray, head_mask, 5)
-
         print("max_val" + str(max_val))
-        # # todo: match hat just in upper area
-        # max_val += 0.5 * matchTemplateWithVariation(image, template_gray, arm_mask, 5)
-        # print("max_val" + str(max_val))
-        # max_val += 0.1 * matchTemplateWithVariation(image, template_gray, body_print_mask, 5)
-        # print("max_val" + str(max_val))
-
 
         if(max_val != float('inf') and max_val > images_corrected_angle_max_val):
             images_corrected_angle_max_val = max_val
@@ -459,17 +413,6 @@ def pipeline(img = None, defects = None):
 
     print("TEMPLATE MATCHING")
     print("Classify Image")
-    # match all masks in variations
-    # get smallest score
-
-    # for class_label, defect_type in enumerate(defects):
-    # res = cv2.matchTemplate(better_image, template_gray, cv2.TM_CCOEFF_NORMED, mask=leg_mask)
-    # min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
-    # print("Zero-Mean Cross Correlation Coefficients ranges from {} to {}".format(min_val, max_val))
-
-    # max_val = matchTemplateWithVariation(better_image, template_gray, leg_mask, 10)
-    # print("Zero-Mean Cross Correlation Coefficients ranges from {} to {}".format(min_val, max_val))
-    # print("")
     
     defect = 0
     (is_hand_missing, is_hand_missing_distance) = is_missing(image, template_gray, hand_mask, 0.215)
@@ -490,43 +433,13 @@ def pipeline(img = None, defects = None):
         defect = 2
     if(is_hat_missing and is_hat_missing_distance == max_distance):
         defect = 3
-    # if(is_face_print_missing and is_face_print_missing_distance == max_distance):
-    #     defect = 4
     if(is_body_print_missing and is_body_print_missing_distance == max_distance):
         defect = 5
     if(is_head_missing and is_head_missing_distance == max_distance):
         defect = 6
-
-    # (predicted_label, max_val) = predict_label(better_image, defects, template_gray)
-    
     print("")
 
     return img, defect
-    # return img, predicted_label
-
-    # (best_image, detected_parts_count, detected_parts, detected_defects) = detectBestImage([better_image], matching_thresh)
-    # print("BEST IMAGE PARTS DETECTED: " + str(detected_parts_count))
-    
-    # if(best_image is not None):
-    #     best_image = cv2.resize(best_image, (best_image.shape[1] * 2, best_image.shape[0] * 2), interpolation=cv2.INTER_AREA)
-    #     cv2.imshow("BEST IMAGE", best_image)
-    
-    # if(detected_parts_count >= 2):
-    #     print("=========== INDY  FOUND ===========")
-    # else:
-    #     print("===========  NOT INDY  ===========")
-
-    # max_defect_label = None
-    # max_defect_val = 0
-
-    # for defect_label, defect_val in detected_defects:
-    #     if(defect_val > max_defect_val):
-    #         max_defect_label = defect_label
-    #         max_defect_val = defect_val
-
-    # print("class_label: " + str(max_defect_label))
-    # print("END")
-    # return img, max_defect_label
 
 if __name__ == "__main__":
     # 0 hand
@@ -548,10 +461,3 @@ if __name__ == "__main__":
         print("IMAGE: " +str(imagePath) + "\n")
         img = cv2.imread(imagePath)
         pipeline(img = img, defects=defects)
-
-
-# "C:\development\Hagenberg\DIP\DIP_Projekt\img\All\image_100.jpg"
-    
-    # imageDir = "./img/All/image_100.jpg"
-    # img = cv2.imread(imageDir)
-    # pipeline(DebugLevel.PRODUCTION, img = img)
