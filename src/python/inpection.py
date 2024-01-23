@@ -16,7 +16,7 @@ import pipeline_clean
 
 # hook here your function to inspect image and return label for the detected defect
 def inspect_image(img, defects):
-    img_processed, predicted_label = pipeline_clean.pipeline(img = img)
+    img_processed, predicted_label = pipeline_clean.pipeline(img = img, defects = defects)
     return img_processed, predicted_label
 
 
@@ -46,8 +46,9 @@ for class_label, defect_type in enumerate(defects):
         ... perform defect detection here
         """
         img_processed, predicted_label = inspect_image(img, defects)
-        y_pred.append(predicted_label)
-        y_true.append(class_label)  # append real class label to true y's
+        if(predicted_label is not None):
+            y_pred.append(predicted_label)
+            y_true.append(class_label)  # append real class label to true y's
 
         if (do_plot):
             f, (ax1, ax2) = plt.subplots(1, 2)
